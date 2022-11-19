@@ -83,4 +83,17 @@ impl GitRepository {
 
         Ok(repo)
     }
+
+    fn find_repo(path: &str) -> Result<GitRepository, String> {
+        let path = Path::new(path);
+
+        if path.join(".git").exists() {
+            return GitRepository::new(path.to_str().unwrap(), false);
+        }
+        let parent = path.parent();
+        match parent {
+            Some(parent) => GitRepository::find_repo(parent.to_str().unwrap()),
+            None => Err(format!("Not in a git repository")),
+        }
+    }
 }
