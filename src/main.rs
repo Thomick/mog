@@ -1,6 +1,9 @@
 use clap::Parser;
 use clap::Subcommand;
 use configparser::ini::Ini;
+use flate2::read::ZlibDecoder;
+use std::fs::File;
+use std::io::Read;
 use std::path::{Path, PathBuf};
 
 #[derive(Parser)]
@@ -95,5 +98,50 @@ impl GitRepository {
             Some(parent) => GitRepository::find_repo(parent.to_str().unwrap()),
             None => Err(format!("Not in a git repository")),
         }
+    }
+}
+
+trait GitObject {
+    fn from(&self, repo: &GitRepository, data: &[u8]) -> Result<Box<dyn GitObject>, String>;
+    fn serialize(&self) -> Result<Vec<u8>, String>;
+    fn deserialize(&self, data: &[u8]) -> Result<Box<dyn GitObject>, String>;
+    fn get_type(&self) -> String;
+}
+
+enum ObjectType {
+    Blob,
+    Tree,
+    Commit,
+    Tag,
+}
+
+fn read_object(repo: &GitRepository, sha: &str) -> Result<ObjectType, String> {
+    let path = repo.gitdir.join("objects").join(&sha[0..2]).join(&sha[2..]);
+    let f = File::open(path).unwrap();
+    let mut decoder = ZlibDecoder::new(f);
+    let mut data = Vec::new();
+    decoder.read_to_end(&mut data).unwrap();
+
+    // Read object type
+    let x = data.iter().position(|&r| r == b' ').unwrap();
+    let obj_type = String::from_utf8(data[0..x].to_vec()).unwrap();
+
+    // Read object size
+    let y = data.iter().position(|&r| r == b'\0').unwrap();
+    let obj_size: usize = String::from_utf8(data[x + 1..y].to_vec())
+        .unwrap()
+        .parse()
+        .unwrap();
+
+    // Read object data
+    let obj_data = data[y + 1..].to_vec();
+    assert!(obj_data.len() == obj_size);
+
+    match obj_type.as_str() {
+        "blob" => Ok(ObjectType::Blob),
+        "tree" => Ok(ObjectType::Tree),
+        "commit" => Ok(ObjectType::Commit),
+        "tag" => Ok(ObjectType::Tag),
+        _ => Err(format!("Unknown object type {}", obj_type)),
     }
 }
