@@ -8,20 +8,65 @@ use std::io::Read;
 use std::io::Write;
 
 trait GitObject {
-    fn from(&self, repo: &GitRepository, data: &[u8]) -> Result<Box<dyn GitObject>, String>;
-    fn serialize(&self) -> Result<Vec<u8>, String>;
-    fn deserialize(&self, data: &[u8]) -> Result<Box<dyn GitObject>, String>;
+    fn serialize(&self) -> Result<Vec<u8>, String> {
+        Err("Not implemented".to_string())
+    }
+
+    fn deserialize(data: &[u8]) -> Result<Box<dyn GitObject>, String>
+    where
+        Self: Sized,
+    {
+        Err("Not implemented".to_string())
+    }
+
     fn get_type(&self) -> String;
 }
 
-enum ObjectType {
-    Blob,
-    Tree,
-    Commit,
-    Tag,
+struct Blob {
+    content: Vec<u8>,
 }
 
-fn read_object(repo: &GitRepository, sha: &str) -> Result<ObjectType, String> {
+impl GitObject for Blob {
+    fn serialize(&self) -> Result<Vec<u8>, String> {
+        Ok(self.content.clone())
+    }
+
+    fn deserialize(data: &[u8]) -> Result<Box<dyn GitObject>, String> {
+        Ok(Box::new(Blob {
+            content: data.to_vec(),
+        }))
+    }
+
+    fn get_type(&self) -> String {
+        "blob".to_string()
+    }
+}
+
+struct Tree;
+
+impl GitObject for Tree {
+    fn get_type(&self) -> String {
+        "tree".to_string()
+    }
+}
+
+struct Commit;
+
+impl GitObject for Commit {
+    fn get_type(&self) -> String {
+        "commit".to_string()
+    }
+}
+
+struct Tag;
+
+impl GitObject for Tag {
+    fn get_type(&self) -> String {
+        "tag".to_string()
+    }
+}
+
+fn read_object(repo: &GitRepository, sha: &str) -> Result<Box<dyn GitObject>, String> {
     let path = repo.gitdir.join("objects").join(&sha[0..2]).join(&sha[2..]);
     let f = File::open(path).unwrap();
     let mut decoder = ZlibDecoder::new(f);
@@ -40,14 +85,14 @@ fn read_object(repo: &GitRepository, sha: &str) -> Result<ObjectType, String> {
         .unwrap();
 
     // Read object data
-    let obj_data = data[y + 1..].to_vec();
+    let obj_data = &data[y + 1..];
     assert!(obj_data.len() == obj_size);
 
     match obj_type.as_str() {
-        "blob" => Ok(ObjectType::Blob),
-        "tree" => Ok(ObjectType::Tree),
-        "commit" => Ok(ObjectType::Commit),
-        "tag" => Ok(ObjectType::Tag),
+        "blob" => Ok(Blob::deserialize(obj_data).unwrap()),
+        "tree" => Ok(Tree::deserialize(obj_data).unwrap()),
+        "commit" => Ok(Commit::deserialize(obj_data).unwrap()),
+        "tag" => Ok(Tag::deserialize(obj_data).unwrap()),
         _ => Err(format!("Unknown object type {}", obj_type)),
     }
 }
