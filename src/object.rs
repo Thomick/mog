@@ -7,7 +7,7 @@ use std::fs::File;
 use std::io::Read;
 use std::io::Write;
 
-trait Object {
+pub trait Object {
     fn serialize(&self) -> Result<Vec<u8>, String> {
         Err("Not implemented".to_string())
     }
@@ -77,7 +77,7 @@ impl Object for Tag {
     }
 }
 
-fn read_object(repo: &Repository, sha: &str) -> Result<Box<dyn Object>, String> {
+pub fn read_object(repo: &Repository, sha: &str) -> Result<Box<dyn Object>, String> {
     let path = repo.gitdir.join("objects").join(&sha[0..2]).join(&sha[2..]);
     let f = match File::open(&path) {
         Ok(f) => f,
@@ -140,6 +140,24 @@ fn write_object(repo: &Repository, obj: &dyn Object) -> Result<String, String> {
     encoder.finish().unwrap();
 
     Ok(to_hex_string(&sha))
+}
+
+pub fn find_object(
+    repo: &Repository,
+    name: &str,
+    obj_type: &str,
+    follow: bool,
+) -> Result<String, String> {
+    let path = repo
+        .gitdir
+        .join("objects")
+        .join(&name[0..2])
+        .join(&name[2..]);
+    if path.exists() {
+        Ok(name.to_string())
+    } else {
+        Err(format!("Object not found: {}", name))
+    }
 }
 
 #[cfg(test)]

@@ -81,7 +81,7 @@ impl Repository {
         Ok(repo)
     }
 
-    fn find_repo(path: &str) -> Result<Repository, String> {
+    pub fn find_repo(path: &str) -> Result<Repository, String> {
         let path = Path::new(path);
 
         if path.join(".git").exists() {
