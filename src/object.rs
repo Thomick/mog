@@ -42,6 +42,17 @@ impl Object for Blob {
     }
 }
 
+impl Blob {
+    fn from_object(obj: &dyn Object) -> Result<Blob, String> {
+        match obj.get_type().as_str() {
+            "blob" => Ok(Blob {
+                content: obj.serialize().unwrap(),
+            }),
+            _ => Err(format!("Casting error : Not a blob")),
+        }
+    }
+}
+
 struct Tree;
 
 impl Object for Tree {
@@ -68,7 +79,16 @@ impl Object for Tag {
 
 fn read_object(repo: &Repository, sha: &str) -> Result<Box<dyn Object>, String> {
     let path = repo.gitdir.join("objects").join(&sha[0..2]).join(&sha[2..]);
-    let f = File::open(path).unwrap();
+    let f = match File::open(&path) {
+        Ok(f) => f,
+        Err(e) => {
+            return Err(format!(
+                "Error opening object({}):{}",
+                path.to_str().unwrap(),
+                e
+            ))
+        }
+    };
     let mut decoder = ZlibDecoder::new(f);
     let mut data = Vec::new();
     decoder.read_to_end(&mut data).unwrap();
@@ -108,8 +128,8 @@ fn write_object(repo: &Repository, obj: &dyn Object) -> Result<String, String> {
     let path = repo
         .gitdir
         .join("objects")
-        .join(to_hex_string(&sha[0..2]))
-        .join(to_hex_string(&sha[2..]));
+        .join(to_hex_string(&sha[0..1]))
+        .join(to_hex_string(&sha[1..]));
     std::fs::create_dir_all(path.parent().unwrap()).unwrap();
     let f = File::create(path).unwrap();
     let mut encoder = flate2::write::ZlibEncoder::new(f, flate2::Compression::default());
@@ -120,4 +140,44 @@ fn write_object(repo: &Repository, obj: &dyn Object) -> Result<String, String> {
     encoder.finish().unwrap();
 
     Ok(to_hex_string(&sha))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::fs::remove_dir_all;
+
+    #[test]
+    fn test_write_blob() {
+        let path = "test_write_blob";
+        let _ = remove_dir_all(path);
+        let repo = Repository::create_repo(path).unwrap();
+        let blob = Blob {
+            content: "Hello, world!".as_bytes().to_vec(),
+        };
+        let sha = write_object(&repo, &blob).unwrap();
+        assert_eq!(sha, "e290f1a2f1d404309f6d614728256282519b50b6");
+        assert!(repo
+            .gitdir
+            .join("objects")
+            .join("e2")
+            .join("90f1a2f1d404309f6d614728256282519b50b6")
+            .exists());
+        //let _ = remove_dir_all(path);
+    }
+
+    #[test]
+    fn test_read_blob() {
+        let path = "test_read_blob";
+        let _ = remove_dir_all(path);
+        let repo = Repository::create_repo(path).unwrap();
+        let blob = Blob {
+            content: "Hello, world!".as_bytes().to_vec(),
+        };
+        let sha = write_object(&repo, &blob).unwrap();
+        let obj = Blob::from_object(read_object(&repo, &sha).unwrap().as_ref()).unwrap();
+        assert_eq!(obj.get_type(), "blob");
+        assert_eq!(obj.content, "Hello, world!".as_bytes().to_vec());
+        let _ = remove_dir_all(path);
+    }
 }
