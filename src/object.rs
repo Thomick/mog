@@ -1,4 +1,4 @@
-use crate::repository::GitRepository;
+use crate::repository::Repository;
 use crate::utils::to_hex_string;
 use flate2::read::ZlibDecoder;
 use sha1::Digest;
@@ -7,12 +7,12 @@ use std::fs::File;
 use std::io::Read;
 use std::io::Write;
 
-trait GitObject {
+trait Object {
     fn serialize(&self) -> Result<Vec<u8>, String> {
         Err("Not implemented".to_string())
     }
 
-    fn deserialize(data: &[u8]) -> Result<Box<dyn GitObject>, String>
+    fn deserialize(data: &[u8]) -> Result<Box<dyn Object>, String>
     where
         Self: Sized,
     {
@@ -26,12 +26,12 @@ struct Blob {
     content: Vec<u8>,
 }
 
-impl GitObject for Blob {
+impl Object for Blob {
     fn serialize(&self) -> Result<Vec<u8>, String> {
         Ok(self.content.clone())
     }
 
-    fn deserialize(data: &[u8]) -> Result<Box<dyn GitObject>, String> {
+    fn deserialize(data: &[u8]) -> Result<Box<dyn Object>, String> {
         Ok(Box::new(Blob {
             content: data.to_vec(),
         }))
@@ -44,7 +44,7 @@ impl GitObject for Blob {
 
 struct Tree;
 
-impl GitObject for Tree {
+impl Object for Tree {
     fn get_type(&self) -> String {
         "tree".to_string()
     }
@@ -52,7 +52,7 @@ impl GitObject for Tree {
 
 struct Commit;
 
-impl GitObject for Commit {
+impl Object for Commit {
     fn get_type(&self) -> String {
         "commit".to_string()
     }
@@ -60,13 +60,13 @@ impl GitObject for Commit {
 
 struct Tag;
 
-impl GitObject for Tag {
+impl Object for Tag {
     fn get_type(&self) -> String {
         "tag".to_string()
     }
 }
 
-fn read_object(repo: &GitRepository, sha: &str) -> Result<Box<dyn GitObject>, String> {
+fn read_object(repo: &Repository, sha: &str) -> Result<Box<dyn Object>, String> {
     let path = repo.gitdir.join("objects").join(&sha[0..2]).join(&sha[2..]);
     let f = File::open(path).unwrap();
     let mut decoder = ZlibDecoder::new(f);
@@ -97,7 +97,7 @@ fn read_object(repo: &GitRepository, sha: &str) -> Result<Box<dyn GitObject>, St
     }
 }
 
-fn write_object(repo: &GitRepository, obj: &dyn GitObject) -> Result<String, String> {
+fn write_object(repo: &Repository, obj: &dyn Object) -> Result<String, String> {
     let data = obj.serialize()?;
     let obj_size = data.len();
     let mut sha = Sha1::new();

@@ -4,10 +4,10 @@ use clap::Subcommand;
 mod object;
 mod repository;
 mod utils;
-use repository::GitRepository;
+use repository::Repository;
 
 #[derive(Parser)]
-#[command(name = "tvcs")]
+#[command(name = "mog")]
 struct Cli {
     #[command(subcommand)]
     command: Commands,
@@ -22,8 +22,8 @@ fn main() {
     let args = Cli::parse();
     match args.command {
         Commands::Init { path } => match path {
-            Some(path) => GitRepository::create_repo(&path).unwrap(),
-            None => GitRepository::create_repo(".").unwrap(),
+            Some(path) => Repository::create_repo(&path).unwrap(),
+            None => Repository::create_repo(".").unwrap(),
         },
     };
 }

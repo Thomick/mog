@@ -1,20 +1,20 @@
 use configparser::ini::Ini;
 use std::path::{Path, PathBuf};
 
-pub struct GitRepository {
+pub struct Repository {
     pub worktree: PathBuf,
     pub gitdir: PathBuf,
     pub conf: Ini,
 }
 
-impl GitRepository {
-    pub fn new(path: &str, force: bool) -> Result<GitRepository, String> {
+impl Repository {
+    pub fn new(path: &str, force: bool) -> Result<Repository, String> {
         let worktree = Path::new(path).to_path_buf();
         let gitdir = worktree.join(".git");
         let mut conf = Ini::new();
 
         if !force && !gitdir.exists() {
-            return Err(format!("Not a Git repository {}", path));
+            return Err(format!("Not a  repository {}", path));
         }
 
         // Read configuration file in .git/config
@@ -32,18 +32,18 @@ impl GitRepository {
             }
         }
 
-        Ok(GitRepository {
+        Ok(Repository {
             worktree: worktree,
             gitdir: gitdir,
             conf: conf,
         })
     }
 
-    pub fn create_repo(path: &str) -> Result<GitRepository, String> {
-        let mut repo = GitRepository::new(path, true)?;
+    pub fn create_repo(path: &str) -> Result<Repository, String> {
+        let mut repo = Repository::new(path, true)?;
 
         if repo.gitdir.exists() {
-            return Err(format!("Git repository already exists"));
+            return Err(format!(" repository already exists"));
         }
 
         // Create .git directory
@@ -60,15 +60,15 @@ impl GitRepository {
         Ok(repo)
     }
 
-    fn find_repo(path: &str) -> Result<GitRepository, String> {
+    fn find_repo(path: &str) -> Result<Repository, String> {
         let path = Path::new(path);
 
         if path.join(".git").exists() {
-            return GitRepository::new(path.to_str().unwrap(), false);
+            return Repository::new(path.to_str().unwrap(), false);
         }
         let parent = path.parent();
         match parent {
-            Some(parent) => GitRepository::find_repo(parent.to_str().unwrap()),
+            Some(parent) => Repository::find_repo(parent.to_str().unwrap()),
             None => Err(format!("Not in a git repository")),
         }
     }
