@@ -22,7 +22,7 @@ pub trait Object {
     fn get_type(&self) -> String;
 }
 
-struct Blob {
+pub struct Blob {
     content: Vec<u8>,
 }
 
@@ -51,9 +51,13 @@ impl Blob {
             _ => Err(format!("Casting error : Not a blob")),
         }
     }
+
+    pub fn new(content: Vec<u8>) -> Blob {
+        Blob { content }
+    }
 }
 
-struct Tree;
+pub struct Tree;
 
 impl Object for Tree {
     fn get_type(&self) -> String {
@@ -61,7 +65,14 @@ impl Object for Tree {
     }
 }
 
-struct Commit;
+impl Tree {
+    pub fn new() -> Tree {
+        panic!("Not implemented");
+        Tree {}
+    }
+}
+
+pub struct Commit;
 
 impl Object for Commit {
     fn get_type(&self) -> String {
@@ -69,11 +80,25 @@ impl Object for Commit {
     }
 }
 
-struct Tag;
+impl Commit {
+    pub fn new() -> Commit {
+        panic!("Not implemented");
+        Commit {}
+    }
+}
+
+pub struct Tag;
 
 impl Object for Tag {
     fn get_type(&self) -> String {
         "tag".to_string()
+    }
+}
+
+impl Tag {
+    pub fn new() -> Tag {
+        panic!("Not implemented");
+        Tag {}
     }
 }
 
@@ -117,29 +142,31 @@ pub fn read_object(repo: &Repository, sha: &str) -> Result<Box<dyn Object>, Stri
     }
 }
 
-fn write_object(repo: &Repository, obj: &dyn Object) -> Result<String, String> {
+pub fn write_object(
+    repo: &Repository,
+    obj: &dyn Object,
+    actually_write: bool,
+) -> Result<String, String> {
     let data = obj.serialize()?;
     let obj_size = data.len();
     let mut sha = Sha1::new();
-    let result = format!("{} {}\0", obj.get_type(), obj_size);
-    sha.update(result.as_bytes());
-    let sha = sha.finalize();
+    let header = format!("{} {}\0", obj.get_type(), obj_size);
+    sha.update(header.as_bytes());
+    sha.update(&data);
+    let sha = to_hex_string(&sha.finalize());
+    if !actually_write {
+        return Ok(sha);
+    }
 
-    let path = repo
-        .gitdir
-        .join("objects")
-        .join(to_hex_string(&sha[0..1]))
-        .join(to_hex_string(&sha[1..]));
+    let path = repo.gitdir.join("objects").join(&sha[0..2]).join(&sha[2..]);
     std::fs::create_dir_all(path.parent().unwrap()).unwrap();
     let f = File::create(path).unwrap();
     let mut encoder = flate2::write::ZlibEncoder::new(f, flate2::Compression::default());
-    encoder
-        .write_all(format!("blob {}\0", obj_size).as_bytes())
-        .unwrap();
+    encoder.write_all(header.as_bytes()).unwrap();
     encoder.write_all(&data).unwrap();
     encoder.finish().unwrap();
 
-    Ok(to_hex_string(&sha))
+    Ok(sha)
 }
 
 pub fn find_object(
@@ -173,7 +200,7 @@ mod tests {
         let blob = Blob {
             content: "Hello, world!".as_bytes().to_vec(),
         };
-        let sha = write_object(&repo, &blob).unwrap();
+        let sha = write_object(&repo, &blob, true).unwrap();
         assert_eq!(sha, "e290f1a2f1d404309f6d614728256282519b50b6");
         assert!(repo
             .gitdir
@@ -192,7 +219,7 @@ mod tests {
         let blob = Blob {
             content: "Hello, world!".as_bytes().to_vec(),
         };
-        let sha = write_object(&repo, &blob).unwrap();
+        let sha = write_object(&repo, &blob, true).unwrap();
         let obj = Blob::from_object(read_object(&repo, &sha).unwrap().as_ref()).unwrap();
         assert_eq!(obj.get_type(), "blob");
         assert_eq!(obj.content, "Hello, world!".as_bytes().to_vec());
